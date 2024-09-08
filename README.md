@@ -1,5 +1,10 @@
 I’m working on a Golang application that serves music files over HTTP, allowing users to access these files from outside the network using ngrok. Users can add multiple directory paths that the app will serve, and multiple ngrok domains that the app will use to tunnel the local server.
 
+### **Usefule Links and Resouces**
+https://ngrok.com/docs/api/#quickstart
+https://pkg.go.dev/github.com/ngrok/ngrok-api-go/v4
+https://chatgpt.com/share/147e1119-7f01-4413-9dfa-9219f89ddb93
+
 ### **Technologies In Use:**
 
 - **Golang**: Core application logic and HTTP file serving.
