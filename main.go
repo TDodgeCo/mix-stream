@@ -38,7 +38,7 @@ type TemplateData struct {
 }
 
 func main() {
-	// Load or prompt for config
+	// Load or create config
 	currentConfig = loadConfig()
 
 	// Run ngrok for each domain
@@ -46,30 +46,27 @@ func main() {
 		go runNgrok(domain)
 	}
 
-	// Serve files over HTTP if there are directories
-	if len(currentConfig.Directories) > 0 {
-		http.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(currentConfig.Directories[0]))))
-	} else {
-		fmt.Println("No directories configured. Please add one through the web interface.")
-	}
+	// Serve files and static assets
+	http.Handle("/files/", http.StripPrefix("/files/", http.FileServer(http.Dir(currentConfig.Directories[0]))))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	// Simple web interface to display files and settings
+	// Web interface
 	http.HandleFunc("/", handleFileList)
 	http.HandleFunc("/update", handleUpdateConfig)
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// Start HTTP server
 	fmt.Println("Serving music on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":3333", nil))
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// Load the config or return an empty config
+// Load config or create default
 func loadConfig() Config {
 	var config Config
 
-	// Check if config file exists
-	if _, err := os.Stat(configFilePath); err == nil {
-		// Load config from file
+	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
+		saveConfig(Config{}) // Create default config
+		log.Println("Created default config file.")
+	} else if err == nil {
 		file, err := os.ReadFile(configFilePath)
 		if err != nil {
 			log.Fatal("Error reading config file:", err)
@@ -78,12 +75,14 @@ func loadConfig() Config {
 		if err != nil {
 			log.Fatal("Error parsing config file:", err)
 		}
+	} else {
+		log.Fatal("Error checking config file:", err)
 	}
 
 	return config
 }
 
-// Save the config to a file
+// Save config
 func saveConfig(config Config) {
 	file, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -95,17 +94,18 @@ func saveConfig(config Config) {
 	}
 }
 
-// Run the ngrok command in the background
+// Run ngrok for a domain
 func runNgrok(domain string) {
 	cmd := exec.Command("ngrok", "http", "--domain="+domain, "8080")
-	err := cmd.Start() // Run ngrok command in the background
+	err := cmd.Start()
 	if err != nil {
-		log.Fatal("Error starting ngrok:", err)
+		log.Printf("Error starting ngrok for domain %s: %v\n", domain, err)
+		return
 	}
 	fmt.Printf("ngrok is running at domain: %s\n", domain)
 }
 
-// Serve a list of music files and directories as a simple HTML page
+// Display files and directories
 func handleFileList(w http.ResponseWriter, r *http.Request) {
 	data := TemplateData{
 		NgrokDomains: currentConfig.NgrokDomains,
@@ -113,11 +113,9 @@ func handleFileList(w http.ResponseWriter, r *http.Request) {
 
 	if len(currentConfig.Directories) > 0 {
 		for _, dir := range currentConfig.Directories {
-			dirData := DirectoryData{
-				Path: dir,
-			}
-
+			dirData := DirectoryData{Path: dir}
 			var files []FileData
+
 			err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
@@ -128,10 +126,9 @@ func handleFileList(w http.ResponseWriter, r *http.Request) {
 					if err != nil {
 						return err
 					}
-					escapedFilePath := url.PathEscape(relativePath)
 					files = append(files, FileData{
 						Name:        filepath.Base(path),
-						EscapedPath: escapedFilePath,
+						EscapedPath: url.PathEscape(relativePath),
 					})
 				}
 				return nil
@@ -153,7 +150,7 @@ func handleFileList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Helper function to check if the file is an audio file (e.g., .mp3, .wav)
+// Helper to check if the file is an audio file
 func isAudioFile(fileName string) bool {
 	ext := filepath.Ext(fileName)
 	switch ext {
@@ -164,32 +161,31 @@ func isAudioFile(fileName string) bool {
 	}
 }
 
-// Handle updating the directories and ngrok domains
+// Update config with new directory and ngrok domain
 func handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		// Get new directory and ngrok domain from form input
 		newDirectory := r.FormValue("directory")
 		newNgrok := r.FormValue("ngrok")
 
-		// Check if directory is valid
-		if _, err := os.Stat(newDirectory); os.IsNotExist(err) {
-			fmt.Fprintf(w, "<html><body><h1>Directory Not Found</h1>")
-			fmt.Fprintf(w, "<p>Error: %s</p>", err)
-			fmt.Fprintf(w, "<a href=\"/\">Go back</a></body></html>")
-			return
+		if !contains(currentConfig.Directories, newDirectory) {
+			currentConfig.Directories = append(currentConfig.Directories, newDirectory)
+		}
+		if !contains(currentConfig.NgrokDomains, newNgrok) {
+			currentConfig.NgrokDomains = append(currentConfig.NgrokDomains, newNgrok)
 		}
 
-		// Add the new directory and ngrok domain to the config
-		currentConfig.Directories = append(currentConfig.Directories, newDirectory)
-		currentConfig.NgrokDomains = append(currentConfig.NgrokDomains, newNgrok)
-
-		// Save the updated config
 		saveConfig(currentConfig)
-
-		// Run ngrok for the new domain
 		go runNgrok(newNgrok)
-
-		// Redirect to the main page
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
+}
+
+// Check if a slice contains an item
+func contains(slice []string, item string) bool {
+	for _, a := range slice {
+		if a == item {
+			return true
+		}
+	}
+	return false
 }
