@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -19,6 +20,22 @@ type Config struct {
 }
 
 var currentConfig Config
+var templates = template.Must(template.ParseGlob("templates/*.html"))
+
+type FileData struct {
+	Name        string
+	EscapedPath string
+}
+
+type DirectoryData struct {
+	Path  string
+	Files []FileData
+}
+
+type TemplateData struct {
+	Directories  []DirectoryData
+	NgrokDomains []string
+}
 
 func main() {
 	// Load or prompt for config
@@ -39,10 +56,11 @@ func main() {
 	// Simple web interface to display files and settings
 	http.HandleFunc("/", handleFileList)
 	http.HandleFunc("/update", handleUpdateConfig)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// Start HTTP server
 	fmt.Println("Serving music on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":3333", nil))
 }
 
 // Load the config or return an empty config
@@ -89,51 +107,61 @@ func runNgrok(domain string) {
 
 // Serve a list of music files and directories as a simple HTML page
 func handleFileList(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "<html><body><h1>Music Files and Directories</h1>")
+	data := TemplateData{
+		NgrokDomains: currentConfig.NgrokDomains,
+	}
 
-	// Check if there are any directories to display
-	if len(currentConfig.Directories) == 0 {
-		fmt.Fprintf(w, "<p>No directories found. Please add one below.</p>")
-	} else {
-		// Display each directory
+	if len(currentConfig.Directories) > 0 {
 		for _, dir := range currentConfig.Directories {
-			fmt.Fprintf(w, "<h2>Directory: %s</h2>", dir)
+			dirData := DirectoryData{
+				Path: dir,
+			}
+
+			var files []FileData
 			err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
-					// Handle any error encountered while walking the path
-					fmt.Fprintf(w, "<p>Error reading file: %s</p>", err)
 					return err
 				}
 
-				if !info.IsDir() {
-					escapedFilePath := url.PathEscape(path[len(dir)+1:])
-					fmt.Fprintf(w, "<li><a href=\"/files/%s\">%s</a></li>", escapedFilePath, filepath.Base(path))
+				if !info.IsDir() && isAudioFile(path) {
+					relativePath, err := filepath.Rel(dir, path)
+					if err != nil {
+						return err
+					}
+					escapedFilePath := url.PathEscape(relativePath)
+					files = append(files, FileData{
+						Name:        filepath.Base(path),
+						EscapedPath: escapedFilePath,
+					})
 				}
 				return nil
 			})
+
 			if err != nil {
 				fmt.Fprintf(w, "<p>Error reading directory: %s</p>", err)
+				continue
 			}
+
+			dirData.Files = files
+			data.Directories = append(data.Directories, dirData)
 		}
 	}
 
-	fmt.Fprintf(w, "<h2>ngrok Domains</h2><ul>")
-	if len(currentConfig.NgrokDomains) == 0 {
-		fmt.Fprintf(w, "<p>No ngrok domains configured. Please add one below.</p>")
-	} else {
-		for _, domain := range currentConfig.NgrokDomains {
-			fmt.Fprintf(w, "<li>%s</li>", domain)
-		}
+	err := templates.ExecuteTemplate(w, "index.html", data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	fmt.Fprintf(w, "<h2>Update Config</h2>")
-	fmt.Fprintf(w, "<form action=\"/update\" method=\"POST\">")
-	fmt.Fprintf(w, "<h3>Add a new directory</h3>")
-	fmt.Fprintf(w, "Directory Path: <input type=\"text\" name=\"directory\" required><br>")
-	fmt.Fprintf(w, "<h3>Add a new ngrok domain</h3>")
-	fmt.Fprintf(w, "ngrok Domain: <input type=\"text\" name=\"ngrok\" required><br>")
-	fmt.Fprintf(w, "<input type=\"submit\" value=\"Update\">")
-	fmt.Fprintf(w, "</form>")
-	fmt.Fprintf(w, "</body></html>")
+}
+
+// Helper function to check if the file is an audio file (e.g., .mp3, .wav)
+func isAudioFile(fileName string) bool {
+	ext := filepath.Ext(fileName)
+	switch ext {
+	case ".mp3", ".wav", ".ogg", ".flac", ".aac":
+		return true
+	default:
+		return false
+	}
 }
 
 // Handle updating the directories and ngrok domains

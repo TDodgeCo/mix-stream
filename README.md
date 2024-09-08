@@ -4,6 +4,11 @@ I’m working on a Golang application that serves music files over HTTP, allowin
 https://ngrok.com/docs/api/#quickstart
 https://pkg.go.dev/github.com/ngrok/ngrok-api-go/v4
 https://chatgpt.com/share/147e1119-7f01-4413-9dfa-9219f89ddb93
+https://api.beatport.com/v4/docs/
+https://developers.soundcloud.com/docs/api/guide
+https://bandcamp.com/developer
+
+
 
 ### **Technologies In Use:**
 

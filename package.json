@@ -1,0 +1,20 @@
+{
+  "name": "hifi-streaming",
+  "version": "1.0.0",
+  "description": "A Golang application that serves music files over HTTP, allowing users to access these files from outside the network using ngrok. Users can add multiple directory paths that the app will serve, and multiple ngrok domains that the app will use to tunnel the local server.",
+  "main": "tailwind.config.js",
+  "scripts": {
+    "build": "npm run build:css && npm run build:ts",
+    "watch": "concurrently \"npm run watch:css\" \"npm run watch:ts\"",
+    "watch:css": "tailwindcss -i ./src/css/app.css -o ./static/css/app.css --watch",
+    "watch:ts": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.5.4"
+  }
+}
