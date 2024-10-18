@@ -1,3 +1,9 @@
+## No longer being worked on
+When I set out to build this, it was out of a mix of need and frustration. I was spending a lot of time rendering audio down in Ableton and then uploading it to Soundcloud to reference on speakers outside of my studio space. This app effectively eliminated the need to upload the audio to Soundcloud. Soon after reaching this point in development, I discovered (Sonobus)[https://sonobus.net/], a free, open-source, fully featured network audio streaming application that then eliminated my need to render audio down at all. I promptly abandoned this project. 
+
+I've added a very liberal license. If you feel you can benefit from what is here in any way, please be my guest.
+
+### Overview
 I’m working on a Golang application that serves music files over HTTP, allowing users to access these files from outside the network using ngrok. Users can add multiple directory paths that the app will serve, and multiple ngrok domains that the app will use to tunnel the local server.
 
 ### **Usefule Links and Resouces**
